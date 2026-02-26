@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// App settings with iCloud sync status and calendar preferences.
+/// App settings and calendar preferences.
 struct SettingsView: View {
     @Bindable var viewModel: CalendarViewModel
     @Environment(\.dismiss) private var dismiss
@@ -8,7 +8,6 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                iCloudSection
                 defaultsSection
                 calendarsSection
             }
@@ -29,68 +28,6 @@ struct SettingsView: View {
             #endif
         }
         .frame(minWidth: 380, minHeight: 450)
-    }
-
-    // MARK: - iCloud Section
-
-    private var iCloudSection: some View {
-        Section {
-            HStack(spacing: 12) {
-                Image(systemName: viewModel.iCloudSyncStatus.systemImage)
-                    .font(.title2)
-                    .foregroundStyle(viewModel.iCloudAvailable ? .blue : .secondary)
-                    .symbolEffect(.pulse, isActive: viewModel.iCloudSyncStatus == .syncing)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("iCloud Sync")
-                        .font(.headline)
-                    Text(viewModel.iCloudSyncStatus.label)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                if viewModel.iCloudAvailable {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                } else {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                }
-            }
-
-            if !viewModel.iCloudAvailable {
-                iCloudUnavailableNotice
-            }
-
-            if viewModel.eventKitManager.hasICloudCalendars {
-                HStack {
-                    Text("iCloud Calendars")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\(viewModel.eventKitManager.iCloudCalendars.count)")
-                        .foregroundStyle(.secondary)
-                }
-            }
-        } header: {
-            Text("iCloud")
-        } footer: {
-            Text("Events saved to iCloud calendars sync automatically across all your devices signed in with the same Apple ID.")
-        }
-    }
-
-    @ViewBuilder
-    private var iCloudUnavailableNotice: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label("iCloud is not available", systemImage: "exclamationmark.triangle")
-                .font(.subheadline)
-                .foregroundStyle(.orange)
-            Text("Sign in to iCloud in System Settings to enable cross-device sync. Events will be stored locally until iCloud is available.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 4)
     }
 
     // MARK: - Defaults Section
@@ -118,29 +55,20 @@ struct SettingsView: View {
     }
 
     private var defaultCalendarPicker: some View {
-        let writableCalendars = viewModel.eventKitManager.calendars.filter(\.allowsContentModifications)
-        let iCloudFirst = writableCalendars.sorted { lhs, rhs in
-            let lhsIC = lhs.source?.title.lowercased().contains("icloud") ?? false
-            let rhsIC = rhs.source?.title.lowercased().contains("icloud") ?? false
-            if lhsIC != rhsIC { return lhsIC }
-            return lhs.title < rhs.title
-        }
+        let writableCalendars = viewModel.eventKitManager.calendars
+            .filter(\.allowsContentModifications)
+            .sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
 
         return Picker("Default Calendar", selection: Binding(
             get: { viewModel.eventKitManager.defaultCalendar?.calendarIdentifier ?? "" },
             set: { viewModel.syncedSettings.preferredCalendarID = $0 }
         )) {
-            ForEach(iCloudFirst, id: \.calendarIdentifier) { cal in
+            ForEach(writableCalendars, id: \.calendarIdentifier) { cal in
                 HStack(spacing: 6) {
                     Circle()
                         .fill(Color(cgColor: cal.cgColor))
                         .frame(width: 8, height: 8)
                     Text(cal.title)
-                    if cal.source?.title.lowercased().contains("icloud") ?? false {
-                        Image(systemName: "icloud")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
                 }
                 .tag(cal.calendarIdentifier)
             }
@@ -175,11 +103,6 @@ struct SettingsView: View {
                                 .frame(width: 10, height: 10)
                             Text(cal.title)
                             Spacer()
-                            if cal.sourceType == .calDAV {
-                                Image(systemName: "icloud")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
                             if cal.isSubscribed {
                                 Image(systemName: "antenna.radiowaves.left.and.right")
                                     .font(.caption2)

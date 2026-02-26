@@ -78,14 +78,6 @@ final class CalendarViewModelTests: XCTestCase {
         XCTAssertTrue(vm.editingEvent?.title.isEmpty ?? false)
     }
 
-    // MARK: - iCloud Status
-
-    func testICloudStatusExposed() {
-        let vm = makeViewModel()
-        // CloudKitManager starts with .idle status
-        XCTAssertNotNil(vm.iCloudSyncStatus)
-    }
-
     // MARK: - Helpers
 
     private func makeDate(year: Int, month: Int, day: Int) -> Date {

@@ -116,8 +116,6 @@ struct MainView: View {
                 } label: {
                     Image(systemName: "line.3.horizontal")
                 }
-
-                iCloudStatusIndicator
             }
         }
         #endif
@@ -143,10 +141,6 @@ struct MainView: View {
         }
 
         ToolbarItemGroup(placement: .automatic) {
-            #if os(macOS)
-            iCloudStatusIndicator
-            #endif
-
             Button("Today") {
                 withAnimation { viewModel.goToToday() }
             }
@@ -184,16 +178,6 @@ struct MainView: View {
         }
     }
 
-    // MARK: - iCloud Status Indicator
-
-    private var iCloudStatusIndicator: some View {
-        Image(systemName: viewModel.iCloudSyncStatus.systemImage)
-            .font(.caption)
-            .foregroundStyle(viewModel.iCloudAvailable ? .blue : .secondary)
-            .symbolEffect(.pulse, isActive: viewModel.iCloudSyncStatus == .syncing)
-            .help(viewModel.iCloudSyncStatus.label)
-    }
-
     // MARK: - Event Editor Sheet
 
     @ViewBuilder
@@ -221,9 +205,6 @@ struct MainView: View {
 
     private func requestAccessAndLoad() {
         Task {
-            // Check iCloud status
-            await viewModel.cloudKitManager.checkAccountStatus()
-
             let granted = await viewModel.eventKitManager.requestAccess()
             if granted {
                 await MainActor.run { viewModel.loadEvents() }

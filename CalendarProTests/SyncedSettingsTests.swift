@@ -4,32 +4,27 @@ import XCTest
 final class SyncedSettingsTests: XCTestCase {
 
     func testDefaultViewMode_IsMonth() {
-        let cloudKit = CloudKitManager()
-        let settings = SyncedSettings(cloudKit: cloudKit)
+        let settings = SyncedSettings()
         XCTAssertEqual(settings.defaultViewMode, "month")
     }
 
     func testVisibleCalendarIDs_DefaultsToEmpty() {
-        let cloudKit = CloudKitManager()
-        let settings = SyncedSettings(cloudKit: cloudKit)
+        let settings = SyncedSettings()
         XCTAssertTrue(settings.visibleCalendarIDs.isEmpty)
     }
 
     func testShowWeekNumbers_DefaultsToFalse() {
-        let cloudKit = CloudKitManager()
-        let settings = SyncedSettings(cloudKit: cloudKit)
+        let settings = SyncedSettings()
         XCTAssertFalse(settings.showWeekNumbers)
     }
 
     func testDefaultAlertOffset_DefaultsToNil() {
-        let cloudKit = CloudKitManager()
-        let settings = SyncedSettings(cloudKit: cloudKit)
+        let settings = SyncedSettings()
         XCTAssertNil(settings.defaultAlertOffset)
     }
 
     func testPreferredCalendarID_DefaultsToNil() {
-        let cloudKit = CloudKitManager()
-        let settings = SyncedSettings(cloudKit: cloudKit)
+        let settings = SyncedSettings()
         XCTAssertNil(settings.preferredCalendarID)
     }
 }

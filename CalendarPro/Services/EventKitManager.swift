@@ -1,9 +1,13 @@
 import Foundation
 import EventKit
 import Observation
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Manages all interactions with the system EventKit framework.
-/// Prioritizes iCloud calendars for storage to ensure cross-device sync.
 @Observable
 final class EventKitManager {
     private let store = EKEventStore()
@@ -12,10 +16,7 @@ final class EventKitManager {
     var calendars: [EKCalendar] = []
     var sources: [EKSource] = []
 
-    /// Reference to CloudKit manager for sync status updates.
-    var cloudKitManager: CloudKitManager?
-
-    /// Reference to synced settings for persisting calendar visibility across devices.
+    /// Reference to synced settings for persisting calendar visibility.
     var syncedSettings: SyncedSettings?
 
     /// Calendar IDs the user has toggled visible (delegates to SyncedSettings when available).
@@ -34,48 +35,18 @@ final class EventKitManager {
         UserDefaults.standard.stringArray(forKey: "visibleCalendarIDs") ?? []
     )
 
-    /// The preferred iCloud calendar for new events.
+    /// Preferred calendar for new events.
     var defaultCalendar: EKCalendar? {
-        // 1. User's explicitly preferred calendar
         if let prefID = syncedSettings?.preferredCalendarID,
            let cal = store.calendar(withIdentifier: prefID) {
             return cal
         }
-        // 2. First writable iCloud calendar
-        if let iCloudCal = preferredICloudCalendar {
-            return iCloudCal
-        }
-        // 3. System default
         return store.defaultCalendarForNewEvents
-    }
-
-    /// The best available iCloud source for creating calendars.
-    var iCloudSource: EKSource? {
-        sources.first { $0.sourceType == .calDAV && $0.title.lowercased().contains("icloud") }
-        ?? sources.first { $0.sourceType == .calDAV }
-    }
-
-    /// Whether iCloud calendars are available.
-    var hasICloudCalendars: Bool {
-        iCloudCalendars.isEmpty == false
-    }
-
-    /// All iCloud calendars.
-    var iCloudCalendars: [EKCalendar] {
-        calendars.filter { cal in
-            cal.source?.sourceType == .calDAV &&
-            (cal.source?.title.lowercased().contains("icloud") ?? false)
-        }
-    }
-
-    /// First writable iCloud calendar.
-    private var preferredICloudCalendar: EKCalendar? {
-        iCloudCalendars.first { $0.allowsContentModifications }
     }
 
     init() {
         self.authorizationStatus = EKEventStore.authorizationStatus(for: .event)
-        if authorizationStatus == .fullAccess || authorizationStatus == .authorized {
+        if authorizationStatus == .fullAccess {
             reloadCalendars()
         }
         observeStoreChanges()
@@ -98,7 +69,6 @@ final class EventKitManager {
                     if visibleCalendarIDs.isEmpty {
                         visibleCalendarIDs = Set(calendars.map(\.calendarIdentifier))
                     }
-                    ensureICloudCalendarExists()
                 }
             }
             return granted
@@ -112,20 +82,10 @@ final class EventKitManager {
     func reloadCalendars() {
         store.refreshSourcesIfNecessary()
         calendars = store.calendars(for: .event)
-            .sorted { lhs, rhs in
-                let lhsICloud = isICloudCalendar(lhs)
-                let rhsICloud = isICloudCalendar(rhs)
-                if lhsICloud != rhsICloud { return lhsICloud }
-                return lhs.title.localizedCompare(rhs.title) == .orderedAscending
-            }
+            .sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
         sources = store.sources
             .filter { !$0.calendars(for: .event).isEmpty }
-            .sorted { lhs, rhs in
-                let lhsICloud = lhs.sourceType == .calDAV && lhs.title.lowercased().contains("icloud")
-                let rhsICloud = rhs.sourceType == .calDAV && rhs.title.lowercased().contains("icloud")
-                if lhsICloud != rhsICloud { return lhsICloud }
-                return lhs.title.localizedCompare(rhs.title) == .orderedAscending
-            }
+            .sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
     }
 
     func calendarGroups() -> [CalendarGroup] {
@@ -140,12 +100,10 @@ final class EventKitManager {
         let cal = EKCalendar(for: .event, eventStore: store)
         cal.title = title
         cal.cgColor = color
-        // Prefer iCloud source for cross-device sync
-        cal.source = source ?? iCloudSource ?? store.defaultCalendarForNewEvents?.source ?? store.sources.first
+        cal.source = source ?? store.defaultCalendarForNewEvents?.source ?? store.sources.first
         try store.saveCalendar(cal, commit: true)
         reloadCalendars()
         visibleCalendarIDs.insert(cal.calendarIdentifier)
-        cloudKitManager?.markSynced()
         return cal
     }
 
@@ -155,36 +113,6 @@ final class EventKitManager {
         ids.remove(calendar.calendarIdentifier)
         visibleCalendarIDs = ids
         reloadCalendars()
-        cloudKitManager?.markSynced()
-    }
-
-    // MARK: - iCloud Calendar Management
-
-    /// Ensures at least one iCloud calendar exists; creates a default one if needed.
-    func ensureICloudCalendarExists() {
-        guard let source = iCloudSource, iCloudCalendars.isEmpty else { return }
-        do {
-            let cal = try createCalendar(
-                title: "CalendarPro",
-                color: {
-                    #if canImport(UIKit)
-                    return UIColor.systemBlue.cgColor
-                    #else
-                    return NSColor.systemBlue.cgColor
-                    #endif
-                }(),
-                source: source
-            )
-            // Set as preferred calendar
-            syncedSettings?.preferredCalendarID = cal.calendarIdentifier
-        } catch {
-            print("Failed to create default iCloud calendar: \(error.localizedDescription)")
-        }
-    }
-
-    private func isICloudCalendar(_ calendar: EKCalendar) -> Bool {
-        calendar.source?.sourceType == .calDAV &&
-        (calendar.source?.title.lowercased().contains("icloud") ?? false)
     }
 
     // MARK: - Event Operations
@@ -227,27 +155,21 @@ final class EventKitManager {
 
     @discardableResult
     func createEvent(_ event: CalendarEvent) throws -> String {
-        cloudKitManager?.markSyncing()
         let ekEvent = EKEvent(eventStore: store)
         applyEventProperties(event, to: ekEvent)
         try store.save(ekEvent, span: .thisEvent)
-        cloudKitManager?.markSynced()
         return ekEvent.eventIdentifier
     }
 
     func updateEvent(_ event: CalendarEvent, span: EKSpan = .thisEvent) throws {
-        cloudKitManager?.markSyncing()
         guard let ekEvent = store.event(withIdentifier: event.id) else { return }
         applyEventProperties(event, to: ekEvent)
         try store.save(ekEvent, span: span)
-        cloudKitManager?.markSynced()
     }
 
     func deleteEvent(withIdentifier id: String, span: EKSpan = .thisEvent) throws {
-        cloudKitManager?.markSyncing()
         guard let ekEvent = store.event(withIdentifier: id) else { return }
         try store.remove(ekEvent, span: span)
-        cloudKitManager?.markSynced()
     }
 
     // MARK: - Search
@@ -271,7 +193,6 @@ final class EventKitManager {
             queue: .main
         ) { [weak self] _ in
             self?.reloadCalendars()
-            self?.cloudKitManager?.markSynced()
         }
     }
 
@@ -291,7 +212,6 @@ final class EventKitManager {
            let cal = store.calendar(withIdentifier: event.calendarIdentifier) {
             ekEvent.calendar = cal
         } else {
-            // Prefer iCloud calendar for new events
             ekEvent.calendar = defaultCalendar
         }
 

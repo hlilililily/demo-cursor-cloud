@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Sidebar with mini-month calendar, calendar list, and iCloud status.
+/// Sidebar with mini-month calendar and calendar list.
 struct SidebarView: View {
     @Bindable var viewModel: CalendarViewModel
 
@@ -9,8 +9,6 @@ struct SidebarView: View {
             miniCalendar
             Divider()
             calendarList
-            Divider()
-            iCloudStatusBar
         }
         #if os(macOS)
         .frame(minWidth: 220, idealWidth: 240, maxWidth: 280)
@@ -41,14 +39,7 @@ struct SidebarView: View {
                         calendarRow(cal)
                     }
                 } header: {
-                    HStack {
-                        Text(group.title)
-                        if isICloudGroup(group) {
-                            Image(systemName: "icloud")
-                                .font(.caption2)
-                                .foregroundStyle(.blue)
-                        }
-                    }
+                    Text(group.title)
                 }
             }
         }
@@ -68,46 +59,8 @@ struct SidebarView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Spacer()
-                if cal.sourceType == .calDAV {
-                    Image(systemName: "icloud")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
-                }
             }
         }
         .buttonStyle(.plain)
-    }
-
-    // MARK: - iCloud Status Bar
-
-    private var iCloudStatusBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: viewModel.iCloudSyncStatus.systemImage)
-                .font(.caption)
-                .foregroundStyle(viewModel.iCloudAvailable ? .blue : .secondary)
-                .symbolEffect(.pulse, isActive: viewModel.iCloudSyncStatus == .syncing)
-
-            Text(viewModel.iCloudSyncStatus.label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-            Spacer()
-
-            if !viewModel.iCloudAvailable {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
-    }
-
-    // MARK: - Helpers
-
-    private func isICloudGroup(_ group: CalendarGroup) -> Bool {
-        group.calendars.contains { $0.sourceType == .calDAV }
     }
 }

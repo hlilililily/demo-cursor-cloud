@@ -30,7 +30,6 @@ final class CalendarViewModel {
 
     let eventKitManager: EventKitManager
     let notificationManager: NotificationManager
-    let cloudKitManager: CloudKitManager
     let syncedSettings: SyncedSettings
 
     var viewMode: ViewMode = .month
@@ -53,22 +52,18 @@ final class CalendarViewModel {
     }
 
     init(
-        cloudKitManager: CloudKitManager = CloudKitManager(),
         eventKitManager: EventKitManager = EventKitManager(),
         notificationManager: NotificationManager = NotificationManager()
     ) {
-        self.cloudKitManager = cloudKitManager
-        let settings = SyncedSettings(cloudKit: cloudKitManager)
-        self.syncedSettings = settings
+        self.syncedSettings = SyncedSettings()
         self.eventKitManager = eventKitManager
         self.notificationManager = notificationManager
 
         // Wire up cross-references
-        eventKitManager.cloudKitManager = cloudKitManager
-        eventKitManager.syncedSettings = settings
+        eventKitManager.syncedSettings = syncedSettings
 
         // Restore last-used view mode
-        if let savedMode = ViewMode(rawValue: settings.defaultViewMode) {
+        if let savedMode = ViewMode(rawValue: syncedSettings.defaultViewMode) {
             self.viewMode = savedMode
         }
     }
@@ -259,15 +254,5 @@ final class CalendarViewModel {
             eventKitManager.visibleCalendarIDs = Set()
         }
         loadEvents()
-    }
-
-    // MARK: - iCloud Status
-
-    var iCloudSyncStatus: CloudKitManager.SyncStatus {
-        cloudKitManager.syncStatus
-    }
-
-    var iCloudAvailable: Bool {
-        cloudKitManager.iCloudAvailable
     }
 }

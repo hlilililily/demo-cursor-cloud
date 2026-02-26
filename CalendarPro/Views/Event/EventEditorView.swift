@@ -99,42 +99,39 @@ struct EventEditorView: View {
 
     private var recurrenceSection: some View {
         Section("Repeat") {
-            ForEach(EventEditorViewModel.recurrencePresets, id: \.label) { preset in
-                Button {
-                    editor.recurrence = preset.rule
-                } label: {
-                    HStack {
-                        Text(preset.label)
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        if recurrenceMatches(preset.rule) {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.accentColor)
-                        }
-                    }
-                }
-            }
+            recurrencePresetRows
+            recurrenceEndSection
+        }
+    }
 
-            if let rule = editor.recurrence {
-                if rule.endRule == nil {
-                    Button("Add End Date…") {
-                        editor.recurrence?.endRule = .endDate(
-                            editor.startDate.addingTimeInterval(86400 * 365)
-                        )
-                    }
-                } else {
-                    switch rule.endRule! {
-                    case .endDate(let date):
-                        DatePicker("End Repeat", selection: Binding(
-                            get: { date },
-                            set: { editor.recurrence?.endRule = .endDate($0) }
-                        ), displayedComponents: .date)
-                    case .occurrenceCount(let count):
-                        Stepper("After \(count) events", value: Binding(
-                            get: { count },
-                            set: { editor.recurrence?.endRule = .occurrenceCount($0) }
-                        ), in: 1...999)
-                    }
+    private var recurrencePresetRows: some View {
+        RecurrencePresetRowsView(
+            selectedRecurrence: $editor.recurrence,
+            recurrenceMatches: recurrenceMatches
+        )
+    }
+
+    @ViewBuilder
+    private var recurrenceEndSection: some View {
+        if let rule = editor.recurrence {
+            if rule.endRule == nil {
+                Button("Add End Date…") {
+                    editor.recurrence?.endRule = .endDate(
+                        editor.startDate.addingTimeInterval(86400 * 365)
+                    )
+                }
+            } else {
+                switch rule.endRule! {
+                case .endDate(let date):
+                    DatePicker("End Repeat", selection: Binding(
+                        get: { date },
+                        set: { editor.recurrence?.endRule = .endDate($0) }
+                    ), displayedComponents: .date)
+                case .occurrenceCount(let count):
+                    Stepper("After \(count) events", value: Binding(
+                        get: { count },
+                        set: { editor.recurrence?.endRule = .occurrenceCount($0) }
+                    ), in: 1...999)
                 }
             }
         }
@@ -165,25 +162,15 @@ struct EventEditorView: View {
 
     private var calendarSection: some View {
         Section("Calendar") {
-            ForEach(calendars) { cal in
-                Button {
-                    editor.calendarIdentifier = cal.id
-                } label: {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(cal.color)
-                            .frame(width: 10, height: 10)
-                        Text(cal.title)
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        if editor.calendarIdentifier == cal.id {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.accentColor)
-                        }
-                    }
-                }
-            }
+            calendarPickerRows
         }
+    }
+
+    private var calendarPickerRows: some View {
+        CalendarPickerRowsView(
+            calendars: calendars,
+            selectedID: $editor.calendarIdentifier
+        )
     }
 
     // MARK: - Notes & URL
@@ -206,5 +193,68 @@ struct EventEditorView: View {
         if preset == nil && editor.recurrence == nil { return true }
         guard let p = preset, let r = editor.recurrence else { return false }
         return p.frequency == r.frequency && p.interval == r.interval
+    }
+}
+
+// MARK: - Helper subviews (isolate ForEach from @State to fix overload resolution)
+
+private struct RecurrencePresetRowsView: View {
+    @Binding var selectedRecurrence: EventRecurrence?
+    let recurrenceMatches: (EventRecurrence?) -> Bool
+
+    private static let presets = EventEditorViewModel.recurrencePresetItems
+
+    var body: some View {
+        Group {
+            presetButton(Self.presets[0])
+            presetButton(Self.presets[1])
+            presetButton(Self.presets[2])
+            presetButton(Self.presets[3])
+            presetButton(Self.presets[4])
+            presetButton(Self.presets[5])
+        }
+    }
+
+    private func presetButton(_ preset: EventEditorViewModel.RecurrencePresetItem) -> some View {
+        Button {
+            selectedRecurrence = preset.rule
+        } label: {
+            HStack {
+                Text(preset.label)
+                    .foregroundStyle(.primary)
+                Spacer()
+                if recurrenceMatches(preset.rule) {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+        }
+    }
+}
+
+private struct CalendarPickerRowsView: View {
+    let calendars: [CalendarGroup.CalendarInfo]
+    @Binding var selectedID: String
+
+    var body: some View {
+        let indices = Array(calendars.indices)
+        return ForEach(indices, id: \.self) { index in
+            Button {
+                selectedID = calendars[index].id
+            } label: {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(calendars[index].color)
+                        .frame(width: 10, height: 10)
+                    Text(calendars[index].title)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    if selectedID == calendars[index].id {
+                        Image(systemName: "checkmark")
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+            }
+        }
     }
 }

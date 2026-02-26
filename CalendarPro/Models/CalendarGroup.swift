@@ -1,6 +1,11 @@
 import Foundation
 import EventKit
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Represents a calendar group/source with associated calendars.
 struct CalendarGroup: Identifiable, Hashable {

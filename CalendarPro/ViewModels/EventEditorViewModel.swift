@@ -82,4 +82,17 @@ final class EventEditorViewModel {
         ("Every Month", EventRecurrence(frequency: .monthly)),
         ("Every Year", EventRecurrence(frequency: .yearly)),
     ]
+
+    /// Identifiable wrapper for ForEach.
+    struct RecurrencePresetItem: Identifiable {
+        let id: String
+        let label: String
+        let rule: EventRecurrence?
+    }
+
+    static var recurrencePresetItems: [RecurrencePresetItem] {
+        recurrencePresets.enumerated().map { offset, item in
+            RecurrencePresetItem(id: "\(offset)-\(item.label)", label: item.label, rule: item.rule)
+        }
+    }
 }
