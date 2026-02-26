@@ -30,6 +30,8 @@ final class CalendarViewModel {
 
     let eventKitManager: EventKitManager
     let notificationManager: NotificationManager
+    let cloudKitManager: CloudKitManager
+    let syncedSettings: SyncedSettings
 
     var viewMode: ViewMode = .month
     var selectedDate: Date = Date()
@@ -40,6 +42,7 @@ final class CalendarViewModel {
     var showingNewEvent = false
     var showingSearch = false
     var showingSidebar = true
+    var showingSettings = false
     var editingEvent: CalendarEvent?
 
     /// Events grouped by date for the current view.
@@ -50,11 +53,24 @@ final class CalendarViewModel {
     }
 
     init(
+        cloudKitManager: CloudKitManager = CloudKitManager(),
         eventKitManager: EventKitManager = EventKitManager(),
         notificationManager: NotificationManager = NotificationManager()
     ) {
+        self.cloudKitManager = cloudKitManager
+        let settings = SyncedSettings(cloudKit: cloudKitManager)
+        self.syncedSettings = settings
         self.eventKitManager = eventKitManager
         self.notificationManager = notificationManager
+
+        // Wire up cross-references
+        eventKitManager.cloudKitManager = cloudKitManager
+        eventKitManager.syncedSettings = settings
+
+        // Restore last-used view mode
+        if let savedMode = ViewMode(rawValue: settings.defaultViewMode) {
+            self.viewMode = savedMode
+        }
     }
 
     // MARK: - Data Loading
@@ -142,6 +158,12 @@ final class CalendarViewModel {
         loadEvents()
     }
 
+    func setViewMode(_ mode: ViewMode) {
+        viewMode = mode
+        syncedSettings.defaultViewMode = mode.rawValue
+        loadEvents()
+    }
+
     // MARK: - Title
 
     var navigationTitle: String {
@@ -170,12 +192,19 @@ final class CalendarViewModel {
         let hour = cal.component(.hour, from: Date())
         let roundedStart = cal.date(bySettingHour: hour + 1, minute: 0, second: 0, of: start) ?? start
 
-        editingEvent = CalendarEvent(
+        var newEvent = CalendarEvent(
             title: "",
             startDate: roundedStart,
             endDate: roundedStart.addingTimeInterval(3600),
             calendarIdentifier: eventKitManager.defaultCalendar?.calendarIdentifier ?? ""
         )
+
+        // Apply default alert if configured
+        if let offset = syncedSettings.defaultAlertOffset {
+            newEvent.alarms = [EventAlarm(offset: offset)]
+        }
+
+        editingEvent = newEvent
         showingNewEvent = true
     }
 
@@ -191,7 +220,6 @@ final class CalendarViewModel {
             showingEventEditor = false
             editingEvent = nil
         } catch {
-            // In production, propagate via an error state
             print("Failed to save event: \(error.localizedDescription)")
         }
     }
@@ -214,11 +242,13 @@ final class CalendarViewModel {
     // MARK: - Calendar Visibility
 
     func toggleCalendarVisibility(_ calendarID: String) {
-        if eventKitManager.visibleCalendarIDs.contains(calendarID) {
-            eventKitManager.visibleCalendarIDs.remove(calendarID)
+        var ids = eventKitManager.visibleCalendarIDs
+        if ids.contains(calendarID) {
+            ids.remove(calendarID)
         } else {
-            eventKitManager.visibleCalendarIDs.insert(calendarID)
+            ids.insert(calendarID)
         }
+        eventKitManager.visibleCalendarIDs = ids
         loadEvents()
     }
 
@@ -226,8 +256,18 @@ final class CalendarViewModel {
         if visible {
             eventKitManager.visibleCalendarIDs = Set(eventKitManager.calendars.map(\.calendarIdentifier))
         } else {
-            eventKitManager.visibleCalendarIDs.removeAll()
+            eventKitManager.visibleCalendarIDs = Set()
         }
         loadEvents()
+    }
+
+    // MARK: - iCloud Status
+
+    var iCloudSyncStatus: CloudKitManager.SyncStatus {
+        cloudKitManager.syncStatus
+    }
+
+    var iCloudAvailable: Bool {
+        cloudKitManager.iCloudAvailable
     }
 }

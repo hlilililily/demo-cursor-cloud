@@ -77,6 +77,9 @@ struct MainView: View {
                             }
                     }
                 }
+                .sheet(isPresented: $viewModel.showingSettings) {
+                    SettingsView(viewModel: viewModel)
+                }
         }
         .onAppear { requestAccessAndLoad() }
     }
@@ -107,10 +110,14 @@ struct MainView: View {
     private var toolbarContent: some ToolbarContent {
         #if os(iOS)
         ToolbarItem(placement: .topBarLeading) {
-            Button {
-                viewModel.showingSidebar = true
-            } label: {
-                Image(systemName: "line.3.horizontal")
+            HStack(spacing: 12) {
+                Button {
+                    viewModel.showingSidebar = true
+                } label: {
+                    Image(systemName: "line.3.horizontal")
+                }
+
+                iCloudStatusIndicator
             }
         }
         #endif
@@ -136,18 +143,24 @@ struct MainView: View {
         }
 
         ToolbarItemGroup(placement: .automatic) {
+            #if os(macOS)
+            iCloudStatusIndicator
+            #endif
+
             Button("Today") {
                 withAnimation { viewModel.goToToday() }
             }
 
-            Picker("View", selection: $viewModel.viewMode) {
+            Picker("View", selection: Binding(
+                get: { viewModel.viewMode },
+                set: { viewModel.setViewMode($0) }
+            )) {
                 ForEach(CalendarViewModel.ViewMode.allCases) { mode in
                     Text(mode.label).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
             .frame(maxWidth: 250)
-            .onChange(of: viewModel.viewMode) { viewModel.loadEvents() }
 
             Button {
                 viewModel.showingSearch = true
@@ -160,7 +173,25 @@ struct MainView: View {
             } label: {
                 Image(systemName: "plus")
             }
+
+            #if os(iOS)
+            Button {
+                viewModel.showingSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            #endif
         }
+    }
+
+    // MARK: - iCloud Status Indicator
+
+    private var iCloudStatusIndicator: some View {
+        Image(systemName: viewModel.iCloudSyncStatus.systemImage)
+            .font(.caption)
+            .foregroundStyle(viewModel.iCloudAvailable ? .blue : .secondary)
+            .symbolEffect(.pulse, isActive: viewModel.iCloudSyncStatus == .syncing)
+            .help(viewModel.iCloudSyncStatus.label)
     }
 
     // MARK: - Event Editor Sheet
@@ -190,6 +221,9 @@ struct MainView: View {
 
     private func requestAccessAndLoad() {
         Task {
+            // Check iCloud status
+            await viewModel.cloudKitManager.checkAccountStatus()
+
             let granted = await viewModel.eventKitManager.requestAccess()
             if granted {
                 await MainActor.run { viewModel.loadEvents() }

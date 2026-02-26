@@ -3,17 +3,21 @@ import XCTest
 
 final class CalendarViewModelTests: XCTestCase {
 
+    private func makeViewModel() -> CalendarViewModel {
+        CalendarViewModel()
+    }
+
     // MARK: - Navigation Title
 
     func testNavigationTitle_Month() {
-        let vm = CalendarViewModel()
+        let vm = makeViewModel()
         vm.viewMode = .month
         vm.currentMonth = makeDate(year: 2025, month: 6, day: 1)
         XCTAssertEqual(vm.navigationTitle, "June 2025")
     }
 
     func testNavigationTitle_Year() {
-        let vm = CalendarViewModel()
+        let vm = makeViewModel()
         vm.viewMode = .year
         vm.currentMonth = makeDate(year: 2025, month: 1, day: 1)
         XCTAssertEqual(vm.navigationTitle, "2025")
@@ -22,17 +26,24 @@ final class CalendarViewModelTests: XCTestCase {
     // MARK: - View Mode Switching
 
     func testSwitchToDay() {
-        let vm = CalendarViewModel()
+        let vm = makeViewModel()
         let date = makeDate(year: 2025, month: 8, day: 20)
         vm.switchToDay(date)
         XCTAssertEqual(vm.viewMode, .day)
         XCTAssertTrue(vm.selectedDate.isSameDay(as: date))
     }
 
+    func testSetViewMode_PersistsToSettings() {
+        let vm = makeViewModel()
+        vm.setViewMode(.week)
+        XCTAssertEqual(vm.viewMode, .week)
+        XCTAssertEqual(vm.syncedSettings.defaultViewMode, "week")
+    }
+
     // MARK: - Navigation Forward/Backward
 
     func testNavigateForward_Month() {
-        let vm = CalendarViewModel()
+        let vm = makeViewModel()
         vm.viewMode = .month
         vm.currentMonth = makeDate(year: 2025, month: 6, day: 1)
         vm.navigateForward()
@@ -41,7 +52,7 @@ final class CalendarViewModelTests: XCTestCase {
     }
 
     func testNavigateBackward_Month() {
-        let vm = CalendarViewModel()
+        let vm = makeViewModel()
         vm.viewMode = .month
         vm.currentMonth = makeDate(year: 2025, month: 6, day: 1)
         vm.navigateBackward()
@@ -50,7 +61,7 @@ final class CalendarViewModelTests: XCTestCase {
     }
 
     func testGoToToday() {
-        let vm = CalendarViewModel()
+        let vm = makeViewModel()
         vm.viewMode = .month
         vm.currentMonth = makeDate(year: 2020, month: 1, day: 1)
         vm.goToToday()
@@ -60,11 +71,19 @@ final class CalendarViewModelTests: XCTestCase {
     // MARK: - Create New Event
 
     func testCreateNewEvent_SetsEditingEvent() {
-        let vm = CalendarViewModel()
+        let vm = makeViewModel()
         vm.createNewEvent()
         XCTAssertNotNil(vm.editingEvent)
         XCTAssertTrue(vm.showingNewEvent)
         XCTAssertTrue(vm.editingEvent?.title.isEmpty ?? false)
+    }
+
+    // MARK: - iCloud Status
+
+    func testICloudStatusExposed() {
+        let vm = makeViewModel()
+        // CloudKitManager starts with .idle status
+        XCTAssertNotNil(vm.iCloudSyncStatus)
     }
 
     // MARK: - Helpers
